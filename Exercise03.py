@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 
 ###### Boyer Moore
 def build_shift_table(pattern):
-      """Створити таблицю зсувів для алгоритму Боєра-Мура."""
     table = {}
     length = len(pattern)
 
@@ -22,26 +21,30 @@ def build_shift_table(pattern):
     table.setdefault(pattern[-1], length)
     return table
 
-def boyer_moore_search(text, pattern):
-    # Створюємо таблицю зсувів для патерну (підрядка)
+def boyer_moore_search(text: str, pattern: str) -> int:
+    if pattern == "":
+        return 0
+    if len(pattern) > len(text):
+        return -1
+
     shift_table = build_shift_table(pattern)
-    i = 0 # Ініціалізуємо початковий індекс для основного тексту
+    m = len(pattern)
+    n = len(text)
 
-    # Проходимо по основному тексту, порівнюючи з підрядком
-    while i <= len(text) - len(pattern):
-        j = len(pattern) - 1 # Починаємо з кінця підрядка
+    i = 0
+    while i <= n - m:
+        j = m - 1
 
-        # Порівнюємо символи від кінця підрядка до його початку
         while j >= 0 and text[i + j] == pattern[j]:
-            j -= 1 # Зсуваємось до початку підрядка
+            j -= 1
 
-        # Якщо весь підрядок збігається, повертаємо його позицію в тексті
         if j < 0:
-            return i # Підрядок знайдено
+            return i  # found
 
-    # Зсуваємо індекс i на основі таблиці зсувів
-    # Це дозволяє "перестрибувати" над неспівпадаючими частинами тексту
-    i += shift_table.get(text[i + len(pattern) - 1], len(pattern))
+        # shift using the "bad character" rule
+        i += shift_table.get(text[i + m - 1], m)
+
+    return -1  # not found
 
 ###### Knut-Morris-Pratt 
 def compute_lps(pattern):
@@ -128,54 +131,133 @@ def rabin_karp_search(main_string, substring):
 
     return -1
 
-###### Checking Time
-def measure_time(function, data, repeats=5):
+# ===================== timemeasure, open file, plot =====================
+
+def measure_time_search(search_func, text: str, pattern: str, repeats: int = 7) -> float:
     times = []
     for _ in range(repeats):
-        start_time = timeit.default_timer()
-        _ = function(data[:]) # creating copy of data - not modifing sample each algorithm gets same unsorted data!!!
-        end_time = timeit.default_timer() - start_time
-        times.append(end_time)
+        start = timeit.default_timer()
+        search_func(text, pattern)
+        times.append(timeit.default_timer() - start)
     return statistics.median(times)
 
-###### Open TXT file to search
-def reading_text_file(filename:str)->str:
-    file_path = filename
 
-    try:
-        with open(file_path, 'r') as file:
-            file_content = file.read()
-        return file_content
-    except FileNotFoundError:
-        print(f"Error: The file '{file_path}' was not found.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-###### Phrase to search
-
-search_phrases = ["AMD Ryzen 5 3600", "Бінарні діаграми рішень (BDD)",
-                "elementToSearch",
-                "Ознаки того, що задачу можливо вирішити",
-                "int pos = startIndex + (((lastIndex-startIndex) / (integers[lastIndex]-integers[startIndex]))*(elementToSearch - integers[startIndex]))",
-                "https://uk.wikipedia.org/wiki/GPGPU",
-                "https"
-                ]
-
-###### Plotting GRAPH
+def reading_text_file(filename: str) -> str:
+    with open(filename, "r", encoding="utf-8") as file:
+        return file.read()
 
 
+def summarize_for_plot(algorithms: dict, text: str, phrases: list[str], repeats: int = 7):
+    """
+    Returns:
+      summary = {
+        algo_name: {
+          "found_time": [...],
+          "not_found_time": [...],
+          "found_med": float or None,
+          "not_found_med": float or None,
+          "found_count": int,
+          "not_found_count": int,
+        }, ...
+      }
+    """
+    summary = {}
 
-###### Main
+    for algo_name, func in algorithms.items():
+        found_times = []
+        not_found_times = []
+
+        for phrase in phrases:
+            idx = func(text, phrase)
+            t = measure_time_search(func, text, phrase, repeats=repeats)
+
+            if idx != -1:
+                found_times.append(t)
+            else:
+                not_found_times.append(t)
+
+        summary[algo_name] = {
+            "found_times": found_times,
+            "not_found_times": not_found_times,
+            "found_med": statistics.median(found_times) if found_times else None,
+            "not_found_med": statistics.median(not_found_times) if not_found_times else None,
+            "found_count": len(found_times),
+            "not_found_count": len(not_found_times),
+        }
+
+    return summary
+
+
+def plot_summary(summary: dict, title: str):
+    algos = list(summary.keys())
+
+    found_vals = [(summary[a]["found_med"] or 0.0) for a in algos]
+    not_found_vals = [(summary[a]["not_found_med"] or 0.0) for a in algos]
+
+    x = list(range(len(algos)))
+    width = 0.35
+
+    plt.figure()
+    plt.bar([i - width/2 for i in x], found_vals, width, label="Found (median)")
+    plt.bar([i + width/2 for i in x], not_found_vals, width, label="Not found (median)")
+
+    plt.xticks(x, algos, rotation=20, ha="right")
+    plt.ylabel("Time (seconds)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    # Optional: show found/not_found counts above each algorithm
+    for i, a in enumerate(algos):
+        fc = summary[a]["found_count"]
+        nfc = summary[a]["not_found_count"]
+        y = max(found_vals[i], not_found_vals[i])
+        plt.text(i, y, f"F:{fc} / NF:{nfc}", ha="center", va="bottom")
+
+    plt.show()
+
+
+# ===================== Main =====================
 
 def main():
-
     algorithms = {
         "Boyer Moore": boyer_moore_search,
         "Knuth–Morris–Pratt": kmp_search,
-        "Rabin Karp":rabin_karp_search,
+        "Rabin Karp": rabin_karp_search,
     }
 
+    search_phrases = [
+        "AMD Ryzen 5 3600",
+        "Бінарні діаграми рішень (BDD)",
+        "elementToSearch",
+        "Ознаки того, що задачу можливо вирішити",
+        "int pos = startIndex + (((lastIndex-startIndex) / (integers[lastIndex]-integers[startIndex]))*(elementToSearch - integers[startIndex]))",
+        "https://uk.wikipedia.org/wiki/GPGPU",
+        "https",
+    ]
 
+    # Put your real filenames here
+    text1 = reading_text_file("article01.txt")
+    text2 = reading_text_file("article02.txt")
+
+    # Build summaries (per text)
+    summary1 = summarize_for_plot(algorithms, text1, search_phrases, repeats=7)
+    summary2 = summarize_for_plot(algorithms, text2, search_phrases, repeats=7)
+
+    # Plot two graphs: one per text file
+    plot_summary(summary1, "Article 1: substring search time (median) + found status")
+    plot_summary(summary2, "Article 2: substring search time (median) + found status")
+
+    # (Optional) print fastest per text in each category
+    def fastest(summary, key):
+        # key in {"found_med", "not_found_med"}
+        candidates = [(a, summary[a][key]) for a in summary if summary[a][key] is not None]
+        return min(candidates, key=lambda x: x[1])[0] if candidates else None
+
+    print("Article 1 fastest (FOUND):", fastest(summary1, "found_med"))
+    print("Article 1 fastest (NOT FOUND):", fastest(summary1, "not_found_med"))
+    print("Article 2 fastest (FOUND):", fastest(summary2, "found_med"))
+    print("Article 2 fastest (NOT FOUND):", fastest(summary2, "not_found_med"))
 
 
 if __name__ == "__main__":

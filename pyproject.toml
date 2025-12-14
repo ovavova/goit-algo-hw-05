@@ -1,7 +1,10 @@
 [project]
-name = "goit-algo-hw-05"
+name = "hw05-search"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.10.8",
+    "pyplotlib>=0.0.56",
+]
